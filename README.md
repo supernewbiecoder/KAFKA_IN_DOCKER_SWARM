@@ -49,7 +49,7 @@ Nếu có lỗi, bạn có thể rollback (quay lại phiên bản cũ).
 
 ### 3. Cách hoạt động của Docker Swarm
 #### *1. Cách node hoạt động*
-![](images\nodesInSwarm.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/nodesInSwarm.png?raw=true)
 
 **1. Manager Node**
 - Chức năng chính: Quản lý cụm, bao gồm:
@@ -88,7 +88,7 @@ Khi triển khai service, Swarm Manager nhận định nghĩa service như một
 Nó sẽ phân bổ service đó lên các node trong Swarm dưới dạng các task replica — mỗi task là một instance độc lập chạy trong container.
 
 
-![](images\service.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/service.png?raw=true)
 
     Container là một tiến trình độc lập (isolated process).
     Mỗi task chỉ tương ứng với một container duy nhất.
@@ -212,7 +212,7 @@ Chúng thường kết nối trực tiếp thông qua các API. Khi số lượn
 
 Ví dụ: Nếu có 5 ứng dụng cần trao đổi với nhau, bạn cần tới 10 kết nối trực tiếp. Nếu một ứng dụng bị sập, các ứng dụng khác có thể bị ảnh hưởng.
 
-![](images\problemThatKafkaSolved.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/problemThatKafkaSolved.png?raw=true)
 
 :arrow_right: Cách kafka giải quyết: Mô hình Pub/Sub (Publish-Subscribe)
 
@@ -220,7 +220,7 @@ Ví dụ: Nếu có 5 ứng dụng cần trao đổi với nhau, bạn cần t�
 - Các ứng dụng nguồn (Producers) không cần biết ứng dụng đích là ai, chúng chỉ cần "publish" dữ liệu lên các Topic (chủ đề) trên Kafka.
 - Các ứng dụng nhận (Consumers) chỉ cần "subscribe" vào các Topic mà chúng quan tâm để nhận dữ liệu.
 
-![](images\problemThatKafkaSolved1.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/problemThatKafkaSolved1.png?raw=true)
 :arrow_right:Kết quả: Giảm độ phức tạp, tách biệt các hệ thống, dễ dàng mở rộng và bảo trì.
 
 
@@ -265,7 +265,7 @@ Ví dụ: Nếu có 5 ứng dụng cần trao đổi với nhau, bạn cần t�
 
 ### 2. Các thành phần trong KAFKA
 
-![](images\kafkaStructure.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/kafkaStructure.png?raw=true)
 
 1. Kafka cluster: Đây là toàn bộ hệ thống Kafka của bạn, bao gồm một hoặc nhiều máy chủ (brokers) hoạt động cùng nhau.
 
