@@ -23,6 +23,7 @@ Tài liệu này là trải nghiệm của tôi về quá trình và cách dựn
       - [*4. Dữ liệu bị cô lập trong các kho dữ liệu (Data Silos)*](#4-dữ-liệu-bị-cô-lập-trong-các-kho-dữ-liệu-data-silos)
     - [2. Các thành phần trong KAFKA](#2-các-thành-phần-trong-kafka)
   - [Kafka trong Docker Swarm.](#kafka-trong-docker-swarm)
+  - [3. Tương tác với Kafka bằng Python](#3-tương-tác-với-kafka-bằng-python)
 
 <!-- /code_chunk_output -->
 
@@ -690,4 +691,307 @@ volumes:
 #hoặc sử dụng NFS volume, cloud volume..., nhưng trong phần này mình sẽ ko đề cập đến
 ```
 
-##
+## 3. Tương tác với Kafka bằng Python
+
+**Thư viện python tương tác với kafka**
+1. confluent-kafka-python
+```pip install confluent-kafka```
+- Ưu điểm: hiệu suất cao
+- Nhược điểm: Cần C library dependencies (khó cài đặt hơn xíu)
+2. kafka-python
+```pip install kafka-python```
+- Ưu điểm: Pure Python, dễ cài đặt
+- Nhược điểm: Hiệu suất thấp hơn
+
+Mình xin phép trình bày ví dụ về confluent-kafka-python
+**Một số tài liệu tham khảo**
+[Confluent Kafka Python Client Official Docs](https://docs.confluent.io/kafka-clients/python/current/overview.html)
+
+[GitHub Repository](https://github.com/confluentinc/confluent-kafka-python)
+
+
+3. ***Ví dụ về tạo kafka producer***
+[Nguồn](https://developer.confluent.io/get-started/python/?session_ref=direct&url_ref=https%3A%2F%2Fdocs.confluent.io%2Fkafka-clients%2Fpython%2Fcurrent%2Foverview.html&_ga=2.178303079.239796269.1763028269-160877263.1761405982&_gl=1*1tkqnrb*_gcl_au*MTA3NjE0OTc5NC4xNzYxNDA1OTgy*_ga*MTYwODc3MjYzLjE3NjE0MDU5ODI.*_ga_D2D3EGKSGD*czE3NjMwMjgyNjkkbzQkZzEkdDE3NjMwMjkyNTQkajMxJGwwJGgw#build-producer):
+```
+from random import choice
+from confluent_kafka import Producer
+
+if __name__ == '__main__':
+
+    config = {
+        # User-specific properties that you must set
+        'bootstrap.servers': '<BOOTSTRAP SERVERS>',
+        'sasl.username':     '<CLUSTER API KEY>',
+        'sasl.password':     '<CLUSTER API SECRET>',
+
+        # Fixed properties
+        'security.protocol': 'SASL_SSL',
+        'sasl.mechanisms':   'PLAIN',
+        'acks':              'all'
+    }
+
+    # Create Producer instance
+    producer = Producer(config)
+
+    # Optional per-message delivery callback (triggered by poll() or flush())
+    # when a message has been successfully delivered or permanently
+    # failed delivery (after retries).
+    def delivery_callback(err, msg):
+        if err:
+            print('ERROR: Message failed delivery: {}'.format(err))
+        else:
+            print("Produced event to topic {topic}: key = {key:12} value = {value:12}".format(
+                topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
+
+    # Produce data by selecting random values from these lists.
+    topic = "purchases"
+    user_ids = ['eabara', 'jsmith', 'sgarcia', 'jbernard', 'htanaka', 'awalther']
+    products = ['book', 'alarm clock', 't-shirts', 'gift card', 'batteries']
+
+    count = 0
+    for _ in range(10):
+        user_id = choice(user_ids)
+        product = choice(products)
+        producer.produce(topic, product, user_id, callback=delivery_callback)
+        count += 1
+
+        # Trigger any outstanding delivery report callbacks.
+        producer.poll(0)
+
+    # Block until the messages are delivered.
+    producer.flush()
+```
+> Lưu ý, để chạy trong docker swarm, ta chỉ cần sửa lại config 1 chút:
+``` 
+config = {
+        'bootstrap.servers': 'localhost:9092',  # hoặc 'kafka-node-1:9092,kafka-node-2:9092,kafka-node-3:9092'
+        
+        # Fixed properties - không cần security vì chạy local
+        'security.protocol': 'PLAINTEXT',  # Thay vì SASL_SSL
+        'acks': 'all'
+    }
+```
+*Toàn cảnh*: Đoạn code này làm nhiệm vụ gửi (produce) 10 message ngẫu nhiên đến một topic Kafka tên là "purchases".
+
+Mỗi message gồm:
+- key: user ID
+- value: product name
+
+  1. Import thư viện
+  ```
+  from random import choice
+  from confluent_kafka import Producer
+  ```
+  - choice() → chọn ngẫu nhiên một phần tử từ danh sách (sử dụng để chọn user & sản phẩm).
+  - Producer → lớp của confluent_kafka dùng để gửi message lên Kafka broker.
+
+  2. Cấu hình Kafka Producer
+  ```
+  config = {
+    # User-specific properties that you must set
+    'bootstrap.servers': '<BOOTSTRAP SERVERS>',
+    'sasl.username':     '<CLUSTER API KEY>',
+    'sasl.password':     '<CLUSTER API SECRET>',
+
+    # Fixed properties
+    'security.protocol': 'SASL_SSL',
+    'sasl.mechanisms':   'PLAIN',
+    'acks':              'all'
+  }
+  ```
+  - ```'bootstrap.servers'```: danh sách địa chỉ các Kafka broker mà client có thể kết nối.
+(Ví dụ: "localhost:9092" nếu bạn chạy Kafka local, hoặc "pkc-abc123.ap-southeast-1.aws.confluent.cloud:9092" nếu dùng Kafka Cloud).
+- ```'sasl.username'``` & ```'sasl.password'```: thông tin xác thực khi kết nối tới Kafka có bảo mật (thường dùng cho Kafka Cloud như Confluent Cloud).
+- ```'security.protocol': 'SASL_SSL'```: chỉ định cơ chế bảo mật.
+  - ```SASL_SSL```: dùng SSL để mã hóa kết nối + SASL để xác thực.
+- ```'sasl.mechanisms': 'PLAIN'```: cơ chế xác thực là SASL/PLAIN (username + password).
+- ```'acks': 'all'```: producer chỉ coi là gửi thành công khi tất cả replica của partition đã xác nhận (đảm bảo độ tin cậy cao nhất). [xem cái này để biết thêm về acks](https://viblo.asia/p/003-gui-va-nhan-message-trong-apache-kafka-LzD5dMmzKjY)
+
+3. Tạo Producer instance
+```producer = Producer(config)```
+- Tạo một Kafka producer client dựa trên cấu hình config.
+- Đây là đối tượng có thể gửi dữ liệu (message) đến Kafka.
+4. Định nghĩa hàm callback khi gửi message
+```
+def delivery_callback(err, msg):
+    if err:
+        print('ERROR: Message failed delivery: {}'.format(err))
+    else:
+        print("Produced event to topic {topic}: key = {key:12} value = {value:12}".format(
+            topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
+```
+- Kafka gửi message bất đồng bộ (asynchronous), tức là ```produce()``` không chờ server phản hồi ngay.
+- Vì vậy, bạn cần một callback để nhận kết quả gửi
+  - ```err```: lỗi (nếu có, ví dụ: Kafka không phản hồi).
+  - ```msg```: message đã được gửi thành công.
+Nếu có lỗi: in thông báo lỗi.
+Nếu thành công: in ra topic, key và value của message vừa gửi.
+5. Chuẩn bị dữ liệu gửi
+```
+topic = "purchases"
+user_ids = ['eabara', 'jsmith', 'sgarcia', 'jbernard', 'htanaka', 'awalther']
+products = ['book', 'alarm clock', 't-shirts', 'gift card', 'batteries']
+```
+- ```topic``` → tên topic Kafka mà bạn muốn gửi message đến.
+- ```user_ids``` → danh sách các user giả lập.
+- ```products``` → danh sách sản phẩm giả lập.
+
+6. Vòng lặp
+```
+count = 0
+for _ in range(10):
+    user_id = choice(user_ids)
+    product = choice(products)
+    producer.produce(topic, product, user_id, callback=delivery_callback)
+    count += 1
+
+    # Trigger any outstanding delivery report callbacks.
+    producer.poll(0)
+```
+- ```for _ in range(10)```: gửi 10 message ngẫu nhiên.
+
+- ```user_id = choice(user_ids)```: chọn ngẫu nhiên một user.
+
+- ```product = choice(products)```: chọn ngẫu nhiên một sản phẩm.
+
+- ```producer.produce(topic, product, user_id, callback=delivery_callback)```
+  - Gửi message đến topic:
+  - topic: "purchases"
+  - value: product (dữ liệu chính, ví dụ "book")
+  - key: user_id (dùng để Kafka xác định partition)
+  - callback: gọi lại delivery_callback khi Kafka xác nhận xong
+
+- ```producer.poll(0)```: Xử lý các callback đang chờ.
+Mỗi lần gọi ```poll(0)``` sẽ kích hoạt ```delivery_callback()``` nếu có message nào vừa hoàn tất gửi.
+
+7. Đợi đến khi tất cả message được gửi xong
+```producer.flush()```
+- flush() sẽ chặn chương trình lại cho đến khi:
+  - tất cả message trong buffer được gửi đi hết, hoặc
+  - hết thời gian timeout (mặc định 5 giây).
+
+ - Giúp đảm bảo không bị mất message nào khi chương trình kết thúc.
+
+***4. Ví dụ về tạo Kafka Consumer***
+
+**Cái này để nhận message từ topic purchase**
+
+```
+from confluent_kafka import Consumer
+
+if __name__ == '__main__':
+
+    config = {
+        # User-specific properties that you must set
+        'bootstrap.servers': '<BOOTSTRAP SERVERS>',
+        'sasl.username':     '<CLUSTER API KEY>',
+        'sasl.password':     '<CLUSTER API SECRET>',
+
+        # Fixed properties
+        'security.protocol': 'SASL_SSL',
+        'sasl.mechanisms':   'PLAIN',
+        'group.id':          'kafka-python-getting-started',
+        'auto.offset.reset': 'earliest'
+    }
+
+    # Create Consumer instance
+    consumer = Consumer(config)
+
+    # Subscribe to topic
+    topic = "purchases"
+    consumer.subscribe([topic])
+
+    # Poll for new messages from Kafka and print them.
+    try:
+        while True:
+            msg = consumer.poll(1.0)
+            if msg is None:
+                # Initial message consumption may take up to
+                # `session.timeout.ms` for the consumer group to
+                # rebalance and start consuming
+                print("Waiting...")
+            elif msg.error():
+                print("ERROR: %s".format(msg.error()))
+            else:
+                # Extract the (optional) key and value, and print.
+                print("Consumed event from topic {topic}: key = {key:12} value = {value:12}".format(
+                    topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Leave group and commit final offsets
+        consumer.close()
+```
+>Lưu ý: để chạy trong docker swarm cũng cần chỉnh lại config 1 chút:
+```
+ config = {
+        'bootstrap.servers': 'localhost:9092',  # ✅
+        'security.protocol': 'PLAINTEXT',       # ✅ Sửa thành PLAINTEXT
+        'group.id': 'kafka-python-getting-started',
+        'auto.offset.reset': 'earliest',
+        'enable.auto.commit': False  # ✅ Thêm để control manual commit
+    }
+```
+1. Thông tin về config cho consumer trong này 
+- ```group.id```: 'kafka-python-getting-started'`
+Mỗi consumer thuộc về một nhóm (consumer group).
+Kafka sẽ chia các partition của topic giữa các consumer trong cùng group.
+Nếu bạn chạy 2 consumer cùng group ID, chúng chia nhau dữ liệu (mỗi message chỉ đến một consumer).
+- ```auto.offset.reset: 'earliest'```: Nếu consumer chưa có offset lưu (chưa đọc lần nào), thì bắt đầu đọc từ đầu topic.
+(Các giá trị khác có thể là 'latest' – chỉ đọc các message mới nhất.)
+2. Tạo Consumer instance
+```consumer = Consumer(config)```
+3. Đăng ký (subscribe) vào topic
+```
+topic = "purchases"
+consumer.subscribe([topic])
+```
+- consumer.subscribe([...]) → Đăng ký lắng nghe 1 hoặc nhiều topic.
+- Ở đây là topic "purchases" — trùng với topic mà producer gửi dữ liệu.
+
+4. Poll dữ liệu liên tục
+```
+try:
+    while True:
+        msg = consumer.poll(1.0)
+        ...
+```
+- ```consumer.poll(timeout=1.0)```: Gọi server Kafka để lấy message mới trong tối đa 1 giây.
+Nếu có ```message```, nó trả về một ```Message``` object; nếu không có, trả về ```None```.
+5. Xử lý kết quả poll
+```
+if msg is None:
+    print("Waiting...")
+elif msg.error():
+    print("ERROR: %s".format(msg.error()))
+else:
+    print("Consumed event from topic {topic}: key = {key:12} value = {value:12}".format(
+        topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
+```
+- ```if msg is None```:
+Không có message mới trong khoảng 1 giây → in "Waiting...".
+(Lưu ý: lần đầu consumer chạy, Kafka có thể mất vài giây để rebalance group.)
+
+- ```elif msg.error()```: Nếu có lỗi (ví dụ Kafka broker ngắt kết nối), in thông báo lỗi.
+
+- ```else```:
+→ Trường hợp có message hợp lệ.
+- Gọi các hàm của ```msg```:
+  - ``msg.topic()`` → tên topic.
+  - ```msg.key()``` → key (ở đây là user ID).
+  - ```msg.value()``` → value (ở đây là product).
+  Rồi decode từ bytes → string, và in ra kết quả.
+
+6. Xử lý dừng bằng tay
+```
+except KeyboardInterrupt:
+    pass
+```
+- Nếu bạn nhấn Ctrl + C để dừng chương trình, nó sẽ thoát vòng lặp an toàn mà không crash.
+7. Đóng kết nối Kafka
+```
+finally:
+    consumer.close()
+```
+- Đảm bảo khi kết thúc chương trình, consumer rời group và commit offset cuối cùng (Kafka lưu lại vị trí đọc).
+- Giúp lần sau chạy lại, consumer chỉ đọc tiếp từ vị trí cũ, không đọc lại từ đầu.
