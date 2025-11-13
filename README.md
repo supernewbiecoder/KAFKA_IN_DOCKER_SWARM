@@ -1,6 +1,7 @@
 # KAFKA_IN_DOCKER_SWARM
 Tài liệu này là trải nghiệm của tôi về quá trình và cách dựng cụm kafka trong docker swarm
 
+
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
@@ -26,6 +27,7 @@ Tài liệu này là trải nghiệm của tôi về quá trình và cách dựn
   - [3. Tương tác với Kafka bằng Python](#3-tương-tác-với-kafka-bằng-python)
 
 <!-- /code_chunk_output -->
+
 
 
 ---
