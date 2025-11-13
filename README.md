@@ -1,6 +1,32 @@
 # KAFKA_IN_DOCKER_SWARM
 Tài liệu này là trải nghiệm của tôi về quá trình và cách dựng cụm kafka trong docker swarm
 
+<!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
+
+<!-- code_chunk_output -->
+
+- [KAFKA_IN_DOCKER_SWARM](#kafka_in_docker_swarm)
+  - [1. Docker swarm](#1-docker-swarm)
+    - [1. Docker swarm là gì](#1-docker-swarm-là-gì)
+    - [2. Đặc điểm nổi bật của Docker swarm](#2-đặc-điểm-nổi-bật-của-docker-swarm)
+    - [3. Cách hoạt động của Docker Swarm](#3-cách-hoạt-động-của-docker-swarm)
+      - [*1. Cách node hoạt động*](#1-cách-node-hoạt-động)
+      - [*2.Cách service hoạt động*](#2cách-service-hoạt-động)
+      - [*Bảo mật trong Docker Swarm bằng PKI (Public Key Infrastructure)*](#bảo-mật-trong-docker-swarm-bằng-pki-public-key-infrastructure)
+      - [*Trạng thái của Task trong Docker Swarm*](#trạng-thái-của-task-trong-docker-swarm)
+      - [*Tóm lại*](#tóm-lại)
+  - [Kafka](#kafka)
+    - [1. Vấn đề mà Kafka giải quyết](#1-vấn-đề-mà-kafka-giải-quyết)
+      - [*1. Mớ hỗn độn của các Kết nối Trực tiếp*](#1-mớ-hỗn-độn-của-các-kết-nối-trực-tiếp)
+      - [*2. Sự khác biệt về Tốc độ xử lý*](#2-sự-khác-biệt-về-tốc-độ-xử-lý)
+      - [*3. Mất dữ liệu và Thiếu tin cậy*](#3-mất-dữ-liệu-và-thiếu-tin-cậy)
+      - [*4. Dữ liệu bị cô lập trong các kho dữ liệu (Data Silos)*](#4-dữ-liệu-bị-cô-lập-trong-các-kho-dữ-liệu-data-silos)
+    - [2. Các thành phần trong KAFKA](#2-các-thành-phần-trong-kafka)
+  - [Kafka trong Docker Swarm.](#kafka-trong-docker-swarm)
+
+<!-- /code_chunk_output -->
+
+
 ---
 ## 1. Docker swarm
 
