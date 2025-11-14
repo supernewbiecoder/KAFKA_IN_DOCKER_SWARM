@@ -1118,7 +1118,7 @@ Sau đây là code của tôi, cũng như hướng dẫn chạy về cụm kafka
 Manager Node của t là VM01.
 
 **Cấu trúc file của t trên VM01 như sau:**
-![](images\fileStructureInManagerNode.png)
+![](https://github.com/supernewbiecoder/KAFKA_IN_DOCKER_SWARM/blob/main/images/fileStructureInManagerNode.png?raw=true)
 
 **Compose.yml**:
 ```
