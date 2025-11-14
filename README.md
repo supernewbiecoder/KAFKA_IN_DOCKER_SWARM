@@ -2,6 +2,8 @@
 Tài liệu này là trải nghiệm của tôi về quá trình và cách dựng cụm kafka trong docker swarm
 
 
+
+
 <!-- @import "[TOC]" {cmd="toc" depthFrom=1 depthTo=6 orderedList=false} -->
 
 <!-- code_chunk_output -->
@@ -28,7 +30,6 @@ Tài liệu này là trải nghiệm của tôi về quá trình và cách dựn
   - [4. Trải nghiệm dựng cụm và tương tác của cá nhân](#4-trải-nghiệm-dựng-cụm-và-tương-tác-của-cá-nhân)
 
 <!-- /code_chunk_output -->
-
 
 
 ---
@@ -1268,12 +1269,14 @@ if __name__ == '__main__':
 
 - ở đây bootstrap sever của t là: ```localhost:19092```
 
-*Tại sao lại thế?: Hãy để ý cấu trúc thư mục file trên VM01, ta sẽ nhận ra, là chả có mối liên hệ trực tiếp nào giữa producer.py và compose.yml, căn bản là producer.py chả dùng chung network với kafka-net đã khai báo với compose.yml. Như vậy để liên kết thì ta cần phải ánh xạ cổng, từ máy host của ta tới node cần thiết, và như vậy:* 
+*Tại sao lại thế?: Hãy để ý cấu trúc thư mục file trên VM01, ta sẽ nhận ra, là chả có mối liên hệ trực tiếp nào giữa producer.py và compose.yml, căn bản là producer.py chả dùng chung network với kafka-net đã khai báo với compose.yml, nói đơn giản là producer.py nó chả liên quan gì tới docker network, tại vì tôi config như vậy :>. Như vậy để liên kết thì ta cần phải ánh xạ cổng, từ máy host của ta tới node cần thiết, và như vậy:* 
 ```
 ports:
      - "19092:9092"  # ✅ Map port 
 ```
-*Chính là cái ánh xạ cổng 19092 của máy host tới 9092.*
+```KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092```
+*Chính là cái ánh xạ cổng 19092 của máy host tới 9092. Và khi kết nối được rồi, thì kafka ấy sẽ trả về là cổng để kết nối với kafka là localhost:19092 :)*
+Nghe có vẻ khó hiểu nhưng nó thật sự khó hiểu, tại vì nhé, khi producer chạy bootstrap sever, nó sẽ nối tới thằng kafka, hỏi xem cách mà nó có thể kết nối được với tới kafka, và kafka đấy sẽ trả về đúng cái giá trị của ```KAFKA_ADVERTISED_LISTENERS```
 
 Sau đó thì...
 làm gì có sau đó nữa, init docker swarm thôi
