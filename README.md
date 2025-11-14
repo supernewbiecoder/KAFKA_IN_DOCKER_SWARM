@@ -25,6 +25,7 @@ Tài liệu này là trải nghiệm của tôi về quá trình và cách dựn
     - [2. Các thành phần trong KAFKA](#2-các-thành-phần-trong-kafka)
   - [Kafka trong Docker Swarm.](#kafka-trong-docker-swarm)
   - [3. Tương tác với Kafka bằng Python](#3-tương-tác-với-kafka-bằng-python)
+  - [4. Trải nghiệm dựng cụm và tương tác của cá nhân](#4-trải-nghiệm-dựng-cụm-và-tương-tác-của-cá-nhân)
 
 <!-- /code_chunk_output -->
 
@@ -346,14 +347,9 @@ Ví dụ: Nếu có 5 ứng dụng cần trao đổi với nhau, bạn cần t�
 [tham khảo thêm về kafka tại đây](https://viblo.asia/s/apache-kafka-tu-zero-den-one-aGK7jPbA5j2)
 
 ## Kafka trong Docker Swarm.
-> Sau đây là cách tôi xây dựng cụm kafka trong Docker Swarm
 
-**1. Giới thiệu**
-Tôi đã thử nghiệm dựng cụm kafka trên docker swarm dựa trên 2 máy ảo mà mình tạo ra, do cấu hình máy thấp. Trong đó bao gồm 1 worker và 1 manager, tuy nhiên việc mở rộng, thêm các broker vào kafka cluster, hay thêm các máy để thêm vào swarm để quản lý thì việc đấy hoàn toàn dễ dàng.
 
-Tôi cài đặt cấu hình các broker vào trong một file compose.yml để triển khai các dịch vụ. Và tôi tận dụng chế độ Apache Kafka mới (Kraft Mode) để đỡ khỏi congif Zookeeper.
-
-**2. Config**
+**1. Config**
 [Các bạn có thể tham khảo đầy đủ các config tại link này](https://kafka.apache.org/documentation/#brokerconfigs)
 
 > Lưu ý: trong tài liệu tham khảo, với mỗi biến đều phải chuyển thành dạng chữ hoa, dấu ```.``` sẽ được chuyển thành dấu ```_```, dấu ```_``` sẽ được chuyển thành ```__```, dấu ```__``` sẽ được chuyển thành ```___```. và phải có ```KAFKA_``` làm tiền tố.
@@ -399,116 +395,97 @@ Tôi cài đặt cấu hình các broker vào trong một file compose.yml để
     2. [KAFKA_LOG_RETENTION_BYTES](https://kafka.apache.org/documentation/#brokerconfigs_log.retention.bytes): Kích thước tối đa của log trước khi bị xóa.
 
 dưới đây là code của t về cụm kafka trong docker swarm.
+> Lưu ý rút ra:
+Trong VM, ta nên để user ở chế độ "root" vì như thế mới có quyền truy cập vào volume.
+Nếu để replicas của 1 service hơn 1, thì NODE_ID sẽ phải cập nhật lại, vì nếu ko sẽ trùng NODE_ID, gây là lỗi.
+
 ```
 version: '3.8'
 
+
 services:
-  kafka-node-1:
-    image: apache/kafka:latest
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: any
-        delay: 10s
-        max_attempts: 3
-      placement:
-        constraints:
-          - node.labels.kafka==true
-    environment:
-      # Cluster & Node Configuration
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_NODE_ID=1
-      - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
-      
-      # Network & Listeners - FIXED for Swarm
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-node-1:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      
-      # Storage & Data Management
-      - KAFKA_LOG_DIRS=/kafka/data
-      
-      # Cluster Management - SIMPLIFIED
-      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=false
-      - KAFKA_NUM_PARTITIONS=3
-      - KAFKA_DEFAULT_REPLICATION_FACTOR=3
-      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=3
-      - KAFKA_MIN_INSYNC_REPLICAS=2
-      
-    volumes:
-      - kafka_data_1:/kafka/data
-    networks:
-      - kafka-net
+ kafka-node-1:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=1
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_1:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19092:9092"  # ✅ Map port
 
-  kafka-node-2:
-    image: apache/kafka:latest
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: any
-        delay: 10s
-        max_attempts: 3
-      placement:
-        constraints:
-          - node.labels.kafka==true
-    environment:
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_NODE_ID=2
-      - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-node-2:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_LOG_DIRS=/kafka/data
-    volumes:
-      - kafka_data_2:/kafka/data
-    networks:
-      - kafka-net
 
-  kafka-node-3:
-    image: apache/kafka:latest
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: any
-        delay: 10s
-        max_attempts: 3
-      placement:
-        constraints:
-          - node.labels.kafka==true
-    environment:
-      - KAFKA_PROCESS_ROLES=broker,controller
-      - KAFKA_NODE_ID=3
-      - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
-      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
-      - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka-node-3:9092
-      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
-      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
-      - KAFKA_LOG_DIRS=/kafka/data
-    volumes:
-      - kafka_data_3:/kafka/data
-    networks:
-      - kafka-net
+ kafka-node-2:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=2
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19093 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_2:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19093:9092"  # ✅ Map port
+
+
+ kafka-node-3:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=3
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19094 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_3:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19094:9092"  # ✅ Map port
+
 
 volumes:
-  kafka_data_1:
-    driver: local
-  kafka_data_2:
-    driver: local  
-  kafka_data_3:
-    driver: local
+ kafka_data_1:
+ kafka_data_2: 
+ kafka_data_3:
+
 
 networks:
-  kafka-net:
-    driver: overlay
-    attachable: true
+ kafka-net:
+   driver: overlay
+   attachable: true
 ```
 **Lệnh triển khai**
 ```
@@ -1125,3 +1102,227 @@ if __name__ == "__main__":
     # manager.delete_topic_example('test_topic_1')
     
 ```
+
+## 4. Trải nghiệm dựng cụm và tương tác của cá nhân
+
+**1. Giới thiệu**
+Tôi đã dựng 3 VM bằng Virtual oracle box, lần lượt là: VM01, VM02, VM03. Và sau đây là những lưu ý khi tôi dựng cụm kafka trên docker swarm.
+- Đầu tiên: Khi dựng cụm, tôi đã mắc một sai lầm, đó là thay vì mình tạo VM mới, tôi lại clone máy đó ra. Điều này khiến cho config và ID của docker nó giống hệt nhau, đồng nghĩa với việc docker swarm không thể phân biệt được docker host nào với docker host nào, như vậy sẽ dẫn tới lỗi.
+- Thứ hai: Khi ở trong VM, ta nên đặt user: "root" làm như vậy ta mới có quyền truy cập vào volume trong service đó. Như vậy mới chạy được.
+- Thứ ba: Khi mới đầu tôi dựng cụm docker swarm, để cho tiết kiệm, tôi sử dụng chính máy vật lý của tôi chạy = window, kết nối với 2 máy ảo ubuntu của oracle box, điều này cũng khiến cho ko thể kết nối được, tại vì Windows host KHÔNG nằm cùng “network layer” với máy ảo Ubuntu khi bạn dùng VirtualBox mặc định (NAT). Ẹ, cái này hỏi chat gpt để biết thêm thông tin
+- Và còn một số vấn đề liên quan đến config network đối với các cụm kafka nói riêng, và đối với docker swarm nói chung. Nói chung là phải để ý thật kỹ các config liên quan tới port, network.
+
+Sau đây là code của tôi, cũng như hướng dẫn chạy về cụm kafka trong docker swarm:
+
+Manager Node của t là VM01.
+
+**Cấu trúc file của t trên VM01 như sau:**
+![](images\fileStructureInManagerNode.png)
+
+**Compose.yml**:
+```
+version: '3.8'
+
+
+services:
+ kafka-node-1:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=1
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19092 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_1:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19092:9092"  # ✅ Map port
+
+
+ kafka-node-2:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=2
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19093 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_2:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19093:9092"  # ✅ Map port
+
+
+ kafka-node-3:
+   image: apache/kafka:latest
+   deploy:
+     replicas: 1
+   environment:
+     - KAFKA_PROCESS_ROLES=broker,controller
+     - KAFKA_NODE_ID=3
+     - KAFKA_CLUSTER_ID=ZkQJ7Sl1TJCmt1VFxIqJow
+     - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka-node-1:9093,2@kafka-node-2:9093,3@kafka-node-3:9093
+     - KAFKA_LISTENERS=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+     - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:19094 
+     - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+     - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+     - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+     - KAFKA_LOG_DIRS=/kafka/data
+   user: "root"
+   volumes:
+     - kafka_data_3:/kafka/data
+   networks:
+     - kafka-net
+   ports:
+     - "19094:9092"  # ✅ Map port
+
+
+volumes:
+ kafka_data_1:
+ kafka_data_2: 
+ kafka_data_3:
+
+
+networks:
+ kafka-net:
+   driver: overlay
+   attachable: true
+
+```
+
+**producer.py**
+```
+from random import choice
+from confluent_kafka import Producer
+
+
+if __name__ == '__main__':
+
+
+   config = {
+       'bootstrap.servers': 'localhost:19092',  #tu dong MAP toi kafka-1
+       # Fixed properties - không cần security vì chạy local
+       'security.protocol': 'PLAINTEXT',  # Thay vì SASL_SSL
+       'acks': 'all'
+   }
+
+
+   # Create Producer instance
+   producer = Producer(config)
+
+
+   # Optional per-message delivery callback (triggered by poll() or flush())
+   # when a message has been successfully delivered or permanently
+   # failed delivery (after retries).
+   def delivery_callback(err, msg):
+       if err:
+           print('ERROR: Message failed delivery: {}'.format(err))
+       else:
+           print("Produced event to topic {topic}: key = {key:12} value = {value:12}".format(
+               topic=msg.topic(), key=msg.key().decode('utf-8'), value=msg.value().decode('utf-8')))
+
+
+   # Produce data by selecting random values from these lists.
+   topic = "purchases"
+   user_ids = ['eabara', 'jsmith', 'sgarcia', 'jbernard', 'htanaka', 'awalther']
+   products = ['book', 'alarm clock', 't-shirts', 'gift card', 'batteries']
+
+
+   count = 0
+   for _ in range(10):
+       user_id = choice(user_ids)
+       product = choice(products)
+       producer.produce(topic, product, user_id, callback=delivery_callback)
+       count += 1
+
+
+       # Trigger any outstanding delivery report callbacks.
+       producer.poll(0)
+
+
+   # Block until the messages are delivered.
+   producer.flush()
+
+```
+> Lưu ý: Ở cái producer.py này, để ý kĩ cái config cho Producer, bootstraps sever tức là liên kết đầu tiên để producer biết cách kết nối tới kafka, tức là nó chỉ cần biết 1 cách kết nối tới 1 node trong kafka, và cụm kafka sẽ lo toàn bộ phần còn lại.
+
+- ở đây bootstrap sever của t là: ```localhost:19092```
+
+*Tại sao lại thế?: Hãy để ý cấu trúc thư mục file trên VM01, ta sẽ nhận ra, là chả có mối liên hệ trực tiếp nào giữa producer.py và compose.yml, căn bản là producer.py chả dùng chung network với kafka-net đã khai báo với compose.yml. Như vậy để liên kết thì ta cần phải ánh xạ cổng, từ máy host của ta tới node cần thiết, và như vậy:* 
+```
+ports:
+     - "19092:9092"  # ✅ Map port 
+```
+*Chính là cái ánh xạ cổng 19092 của máy host tới 9092.*
+
+Sau đó thì...
+làm gì có sau đó nữa, init docker swarm thôi
+
+```sudo docker init --advertise-addr <your ip addr>```
+ởm, dùng ubuntu nên phải có sudo ở đầu.
+nó sẽ nhả ra 1 cái, kiểu như
+```
+To add a worker to this swarm, run the following command:
+
+    docker swarm join --token SWMTKN-1-0xk4ulb29lbjue508ohxcdyd17qi4cixb0obscdslczefk5cfs-9ks7frappludvso6w0q9jgjv2 192.168.1.211:2377
+```
+sau đó, vào thư mục có chứa cái file compose.yml với cái producer ấy, ở đây của tôi là:
+```vboxuser@VM01:~$ cd ~/Desktop/KAFKA_IN_SWARM```
+rồi tôi chạy:
+```sudo docker stack deploy -c compose.yml lancuoi``` với lancuoi là tên stack của tôi.
+```sudo docker service ls``` rồi chạy cái này để xem bước đầu dựng cụm đã thành công chưa
+```
+  ID             NAME                   MODE         REPLICAS   IMAGE                 PORTS
+  plrbxz1nv1bp   lancuoi_kafka-node-1   replicated   1/1        apache/kafka:latest   *:19092->9092/tcp
+  jemjd4wpqcbf   lancuoi_kafka-node-2   replicated   1/1        apache/kafka:latest   *:19093->9092/tcp
+  n7wfiex8ngks   lancuoi_kafka-node-3   replicated   1/1        apache/kafka:latest   *:19094->9092/tcp
+  ```
+replicas 1/1 hoặc 2/2 hay gì đấy là oke rồi, cẩn thận hơn thì check log, check lịch sử.
+> Thêm một lưu ý nữa là nên check logs, của service, khi check để ý trình tự thời gian, xem nó có chạy ổn định không. Với một số cấu hình tồi, khiến cho một service bị lỗi liên tọi ấy, thì cái service ấy sẽ liên tục bị shutdown rồi lại bật lại, nói chung là lỗi, ko chạy ổn định, lúc này mỗi lần bạn nhập lệnh trên, cái replicas nó sẽ khác nhau, nếu ko check kĩ thì có khi giống mình, cứ lầm tưởng là nó chạy ngon nghẻ rồi các thứ, là toang đấy.
+
+chạy ổn định rồi thì test thử producer thôi, cũng là chạy ở trên cd có chứa compose và producer nhá.
+```source venv/bin/activate```: cài môi trường ảo
+```pip install confluent-kafka```: để cài thư viện
+```python producer.py```
+```
+%5|1763100857.024|REQTMOUT|rdkafka#producer-1| [thrd:localhost:19092/bootstrap]: localhost:19092/bootstrap: Timed out ApiVersionRequest in flight (after 10018ms, timeout #0)
+%4|1763100857.025|FAIL|rdkafka#producer-1| [thrd:localhost:19092/bootstrap]: localhost:19092/bootstrap: ApiVersionRequest failed: Local: Timed out: probably due to broker version < 0.10 (see api.version.request configuration) (after 10019ms in state APIVERSION_QUERY)
+%4|1763100857.025|REQTMOUT|rdkafka#producer-1| [thrd:localhost:19092/bootstrap]: localhost:19092/bootstrap: Timed out 1 in-flight, 0 retry-queued, 0 out-queue, 0 partially-sent requests
+Produced event to topic purchases: key = htanaka      value = alarm clock 
+Produced event to topic purchases: key = jsmith       value = batteries   
+Produced event to topic purchases: key = sgarcia      value = alarm clock 
+Produced event to topic purchases: key = htanaka      value = gift card   
+Produced event to topic purchases: key = awalther     value = gift card   
+Produced event to topic purchases: key = eabara       value = batteries   
+Produced event to topic purchases: key = awalther     value = batteries   
+Produced event to topic purchases: key = awalther     value = alarm clock 
+Produced event to topic purchases: key = jbernard     value = t-shirts    
+Produced event to topic purchases: key = jbernard     value = alarm clock 
+```
+nói chung là kết quả của t đây. Mặc dù có timeout warning, nhưng 10 messages đã được produce thành công vào topic purchases. Ít nhất là như thế.
+
+Giải thích warnings:
+- Timeout ApiVersionRequest: Kafka client thử detect broker version nhưng timeout
+- Có thể do network latency hoặc broker đang khởi động chậm
+- KHÔNG ảnh hưởng đến functionality - messages vẫn được gửi thành công
+
