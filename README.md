@@ -997,3 +997,131 @@ finally:
 ```
 - Đảm bảo khi kết thúc chương trình, consumer rời group và commit offset cuối cùng (Kafka lưu lại vị trí đọc).
 - Giúp lần sau chạy lại, consumer chỉ đọc tiếp từ vị trí cũ, không đọc lại từ đầu.
+
+***5. Ví dụ quản lý topic***
+```
+# topic_manager.py
+from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka import KafkaException
+
+class TopicManager:
+    def __init__(self, bootstrap_servers='localhost:9092'):
+        self.admin = AdminClient({
+            'bootstrap.servers': bootstrap_servers
+        })
+    
+    def create_topic_example(self, topic_name, partitions=3):
+        """Hàm mẫu: Tạo topic mới"""
+        try:
+            # Tạo topic object
+            new_topic = NewTopic(
+                topic_name, 
+                num_partitions=partitions, 
+                replication_factor=1
+            )
+            
+            # Gửi request tạo topic
+            result = self.admin.create_topics([new_topic])
+            
+            # Chờ và xử lý kết quả
+            for topic, future in result.items():
+                future.result()  # Chờ topic được tạo
+                print(f"✅ Đã tạo topic: {topic}")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Lỗi tạo topic: {e}")
+            return False
+    
+    def list_topics_example(self):
+        """Hàm mẫu: Liệt kê tất cả topics"""
+        try:
+            metadata = self.admin.list_topics(timeout=10)
+            
+            print("📋 Danh sách topics:")
+            for topic_name in metadata.topics:
+                print(f"  - {topic_name}")
+            
+            return list(metadata.topics.keys())
+            
+        except Exception as e:
+            print(f"❌ Lỗi lấy danh sách topics: {e}")
+            return []
+    
+    def describe_topic_example(self, topic_name):
+        """Hàm mẫu: Xem thông tin chi tiết topic"""
+        try:
+            metadata = self.admin.list_topics(timeout=10)
+            
+            if topic_name not in metadata.topics:
+                print(f"❌ Topic '{topic_name}' không tồn tại")
+                return None
+            
+            topic = metadata.topics[topic_name]
+            partitions_info = []
+            
+            for partition_id, partition in topic.partitions.items():
+                partition_info = {
+                    'id': partition_id,
+                    'leader': partition.leader,
+                    'replicas': partition.replicas,
+                    'isr': partition.isr
+                }
+                partitions_info.append(partition_info)
+            
+            topic_info = {
+                'name': topic_name,
+                'partitions': partitions_info,
+                'partition_count': len(partitions_info)
+            }
+            
+            print(f"📊 Topic: {topic_name}")
+            print(f"Partitions: {len(partitions_info)}")
+            for p in partitions_info:
+                print(f"  Partition {p['id']}: Leader={p['leader']}, Replicas={p['replicas']}")
+            
+            return topic_info
+            
+        except Exception as e:
+            print(f"❌ Lỗi xem thông tin topic: {e}")
+            return None
+    
+    def delete_topic_example(self, topic_name):
+        """Hàm mẫu: Xóa topic"""
+        try:
+            result = self.admin.delete_topics([topic_name])
+            
+            for topic, future in result.items():
+                future.result()  # Chờ xóa hoàn tất
+                print(f"✅ Đã xóa topic: {topic}")
+                return True
+                
+        except Exception as e:
+            print(f"❌ Lỗi xóa topic: {e}")
+            return False
+
+# Sử dụng các hàm mẫu
+if __name__ == "__main__":
+    manager = TopicManager('localhost:9092')
+    
+    # Ví dụ sử dụng các hàm
+    print("=== VÍ DỤ SỬ DỤNG CÁC HÀM MẪU ===")
+    
+    # 1. Tạo topic
+    print("\n1. Tạo topic mẫu:")
+    manager.create_topic_example('test_topic_1', partitions=3)
+    
+    # 2. Liệt kê topics
+    print("\n2. Liệt kê topics:")
+    topics = manager.list_topics_example()
+    
+    # 3. Xem thông tin topic
+    print("\n3. Xem thông tin topic:")
+    if topics:
+        manager.describe_topic_example(topics[0])
+    
+    # 4. Xóa topic (bỏ comment để test)
+    # print("\n4. Xóa topic:")
+    # manager.delete_topic_example('test_topic_1')
+    
+```
